@@ -1,0 +1,49 @@
+# Compiled binaries
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.mdb
+
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.userprefs
+*.sln.DotSettings
+*.csproj.user
+
+# Build results
+Debug/
+Release/
+x64/
+x86/
+publish/
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Unity
+Library/
+Assets/
+ProjectSettings/
+Temp/
+obj/
+*.csproj
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs
+*.log
+YTChatKSP_Debug.log
