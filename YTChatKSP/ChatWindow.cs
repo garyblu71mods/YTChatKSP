@@ -25,8 +25,11 @@ public class ChatWindow
     private readonly HashSet<string> seenMessageIds = new HashSet<string>();
     private readonly Dictionary<string, float> flashStart = new Dictionary<string, float>();
 
+    // Cache dla rendered nick strings (aby nie robić "nick + :" co frame)
+    private readonly Dictionary<string, string> nickDisplayCache = new Dictionary<string, string>();
+
     // Ustawienia (mogą być nadpisane z Config)
-    private int messageLimit = 50;
+    private int messageLimit = 15; // Limit do 15 wiadomości dla performance
     private float autoHideSeconds = 0f; // 0 = off
     private float opacity = 1f;
     private bool showBorder = true;
@@ -35,8 +38,18 @@ public class ChatWindow
     // Ostatnia aktywność (ostatnia otrzymana wiadomość)
     private float lastActivityTime = 0f;
 
+    // Throttling: odśwież wiadomości co N sekund (nie co frame!)
+    private float lastFetchTime = 0f;
+    private float fetchInterval = 2f; // Co 2 sekundy
+
+    // Cache dla reflection (aby nie robić Type.GetType() co frame!)
+    private Type serverClientType = null;
+    private MethodInfo getMessagesMethod = null;
+
     // Styl do wrapowania tekstu
     private GUIStyle messageStyle;
+    private GUIStyle nickStyle;
+    private GUIStyle textStyle;
 
     // Konstruktor - załaduj ustawienia z Config (przez reflection) i ustaw style
     public ChatWindow()
@@ -45,22 +58,36 @@ public class ChatWindow
 
         messageStyle = new GUIStyle(GUI.skin.label);
         messageStyle.wordWrap = true;
+
+        nickStyle = new GUIStyle(GUI.skin.label);
+        nickStyle.wordWrap = false;
+
+        textStyle = new GUIStyle(GUI.skin.label);
+        textStyle.wordWrap = true;
+
+        // Cache reflection lookup
+        serverClientType = Type.GetType("ServerClient");
+        if (serverClientType != null)
+        {
+            getMessagesMethod = serverClientType.GetMethod("GetMessages", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        }
     }
 
     // Główna metoda rysująca okno (wywoływana z OnGUI)
     public void Draw()
     {
-        if (!Visible) return;
-
-        // Odśwież wiadomości (pobierz z ServerClient)
+        // ZAWSZE odśwież wiadomości (nawet gdy okno jest hidden)
+        // To umożliwia poprawne działanie auto-hide: pojawienie okna gdy przychodzą nowe wiadomości
         FetchMessagesIfNeeded();
 
-        // Auto-hide: jeśli włączone i brak aktywności dłuższej niż autoHideSeconds
+        // Auto-hide: jeśli włączone, czekaj autoHideSeconds od ostatniej wiadomości
         if (autoHideSeconds > 0f && Time.realtimeSinceStartup - lastActivityTime > autoHideSeconds)
         {
             Visible = false;
-            return;
+            // Dalej przetwarzamy polecenie pobierania wiadomości, ale nie rysujemy okna
         }
+
+        if (!Visible) return;
 
         // Ustawienie alpha (opacity)
         Color prevColor = GUI.color;
@@ -130,16 +157,16 @@ public class ChatWindow
         {
             var m = messages[i];
 
-            // Kolor nicku
-            Color nickColor = ColorForNick(m.Nick ?? "");
-
             GUILayout.BeginHorizontal();
 
-            // Nick
-            GUIStyle nickStyle = new GUIStyle(GUI.skin.label);
-            nickStyle.normal.textColor = nickColor;
-            nickStyle.wordWrap = false;
-            GUILayout.Label(m.Nick + ":", nickStyle, GUILayout.Width(120));
+            // Nick - używaj cache zamiast concatenacji co frame
+            string nickDisplay = null;
+            if (!nickDisplayCache.TryGetValue(m.Nick, out nickDisplay))
+            {
+                nickDisplay = m.Nick + ":";
+                nickDisplayCache[m.Nick] = nickDisplay;
+            }
+            GUILayout.Label(nickDisplay, nickStyle, GUILayout.Width(120));
 
             // Treść wiadomości - obsługa flash jeśli nowa
             bool isFlashing = false;
@@ -154,16 +181,20 @@ public class ChatWindow
                 }
             }
 
-            GUIStyle contentStyle = new GUIStyle(messageStyle);
+            // Ustaw kolor tekstowego stylu (zamiast tworzenia nowego)
             if (isFlashing)
             {
-                contentStyle.normal.textColor = Color.red; // miganie na czerwono
+                textStyle.normal.textColor = Color.red; // miganie na czerwono
+            }
+            else
+            {
+                textStyle.normal.textColor = Color.white; // normalny biały
             }
 
-            GUILayout.Label(m.Text, contentStyle);
+            GUILayout.Label(m.Text, textStyle);
 
             GUILayout.EndHorizontal();
-            GUILayout.Space(6);
+            GUILayout.Space(2); // Mniejszy spacing dla performance
         }
 
         GUILayout.EndScrollView();
@@ -175,30 +206,21 @@ public class ChatWindow
     // Pobierz wiadomości z ServerClient (przez reflection) i zmapuj do ChatMessage
     private void FetchMessagesIfNeeded()
     {
+        // Throttle: fetch co 2 sekundy, nie co frame!
+        if (Time.realtimeSinceStartup - lastFetchTime < fetchInterval)
+            return;
+
+        lastFetchTime = Time.realtimeSinceStartup;
+
         try
         {
-            var scType = Type.GetType("ServerClient");
+            // Użyj cached type i method zamiast Type.GetType() co frame!
+            if (serverClientType == null || getMessagesMethod == null)
+                return;
+
             IEnumerable raw = null;
-            if (scType != null)
-            {
-                // Preferowana metoda: public static IEnumerable GetMessages()
-                var gm = scType.GetMethod("GetMessages", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                if (gm != null)
-                {
-                    var ret = gm.Invoke(null, null);
-                    raw = ret as IEnumerable;
-                }
-                else
-                {
-                    // Alternatywa: statyczna property Messages
-                    var prop = scType.GetProperty("Messages", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                    if (prop != null)
-                    {
-                        var ret = prop.GetValue(null, null);
-                        raw = ret as IEnumerable;
-                    }
-                }
-            }
+            var ret = getMessagesMethod.Invoke(null, null);
+            raw = ret as IEnumerable;
 
             if (raw == null) return;
 
@@ -232,6 +254,12 @@ public class ChatWindow
                 }
             }
 
+            // Jeśli przychodzą nowe wiadomości i auto-hide schował okno → pokazz okno
+            if (hasNew && !Visible && autoHideSeconds > 0f)
+            {
+                Visible = true;
+                Debug.Log("[ChatWindow] New message - showing chat window");
+            }
             if (hasNew || messages.Count == 0)
             {
                 // Zaktualizuj wewnętrzną listę (ostatnie N wiadomości)
@@ -239,6 +267,42 @@ public class ChatWindow
                 // Zachowaj tylko ostatnie messageLimit elementów
                 int start = Math.Max(0, latest.Count - messageLimit);
                 for (int i = start; i < latest.Count; i++) messages.Add(latest[i]);
+
+                // Czyszczenie starych message IDs z cache'u (aby nie rosły w nieskończoność)
+                var currentMessageIds = new HashSet<string>();
+                var currentNicks = new HashSet<string>();
+                foreach (var m in messages)
+                {
+                    if (!string.IsNullOrEmpty(m.Id))
+                        currentMessageIds.Add(m.Id);
+                    if (!string.IsNullOrEmpty(m.Nick))
+                        currentNicks.Add(m.Nick);
+                }
+
+                // Usuń IDs które nie są już wyświetlane
+                var idsToRemove = new List<string>();
+                foreach (var id in seenMessageIds)
+                {
+                    if (!currentMessageIds.Contains(id))
+                        idsToRemove.Add(id);
+                }
+                foreach (var id in idsToRemove)
+                {
+                    seenMessageIds.Remove(id);
+                    flashStart.Remove(id);
+                }
+
+                // Czyszczenie nickDisplayCache - usuwaj nicki które nie są już wyświetlane
+                var nicksToRemove = new List<string>();
+                foreach (var nick in nickDisplayCache.Keys)
+                {
+                    if (!currentNicks.Contains(nick))
+                        nicksToRemove.Add(nick);
+                }
+                foreach (var nick in nicksToRemove)
+                {
+                    nickDisplayCache.Remove(nick);
+                }
             }
         }
         catch (Exception ex)
@@ -290,17 +354,6 @@ public class ChatWindow
     }
 
     // Konwersja nicku na kolor (hash -> odcień)
-    private static Color ColorForNick(string nick)
-    {
-        if (string.IsNullOrEmpty(nick)) return Color.white;
-        int h = nick.GetHashCode();
-        uint uh = (uint)h;
-        float hue = (uh % 360) / 360f;
-        float sat = 0.6f;
-        float val = 0.9f;
-        return Color.HSVToRGB(hue, sat, val);
-    }
-
     // Załaduj konfigurację z typu Config (przez reflection) jeśli dostępny
     private void LoadConfig()
     {
@@ -329,6 +382,9 @@ public class ChatWindow
 
             var to = cfgType.GetField("TextOnly", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
             if (to != null && to.GetValue(null) is bool tob) textOnly = tob;
+
+            var ri = cfgType.GetField("RefreshInterval", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (ri != null && ri.GetValue(null) is float rif) fetchInterval = rif;
         }
         catch (Exception ex)
         {

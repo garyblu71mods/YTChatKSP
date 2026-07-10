@@ -18,9 +18,6 @@ public class SettingsWindow
     private int windowHeight = 300;
     private bool showBorder = true;
     private float autoHideSeconds = 0f;
-    private bool nickColoring = true;
-    private bool flashNewMessages = true;
-    private bool textOnly = false;
 
     public SettingsWindow()
     {
@@ -64,10 +61,6 @@ public class SettingsWindow
         showBorder = GUILayout.Toggle(showBorder, "Show border");
         GUILayout.Label("Auto-hide seconds (0 = off)");
         autoHideSeconds = GUILayout.HorizontalSlider(autoHideSeconds, 0f, 600f);
-
-        nickColoring = GUILayout.Toggle(nickColoring, "Nick coloring");
-        flashNewMessages = GUILayout.Toggle(flashNewMessages, "Flash new messages");
-        textOnly = GUILayout.Toggle(textOnly, "Text only mode");
 
         GUILayout.Space(6);
 
@@ -135,9 +128,6 @@ public class SettingsWindow
             var wh = getInt("WindowHeight"); if (wh > 0) windowHeight = wh;
             showBorder = getBool("ShowBorder");
             autoHideSeconds = getFloat("AutoHideSeconds");
-            nickColoring = getBool("NickColoring");
-            flashNewMessages = getBool("FlashNewMessages");
-            textOnly = getBool("TextOnly");
         }
         catch (Exception ex)
         {
@@ -170,9 +160,17 @@ public class SettingsWindow
             setValue("WindowHeight", windowHeight);
             setValue("ShowBorder", showBorder);
             setValue("AutoHideSeconds", autoHideSeconds);
-            setValue("NickColoring", nickColoring);
-            setValue("FlashNewMessages", flashNewMessages);
-            setValue("TextOnly", textOnly);
+
+            // Synchronizuj AutoHideTime i AutoHide bool na podstawie AutoHideSeconds
+            if (autoHideSeconds > 0)
+            {
+                setValue("AutoHideTime", autoHideSeconds);
+                setValue("AutoHide", true);
+            }
+            else
+            {
+                setValue("AutoHide", false);
+            }
 
             // Jeśli Config ma metodę Save lub SaveConfig -> wywołaj
             var saveMethod = cfgType.GetMethod("Save", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
@@ -240,10 +238,6 @@ public class SettingsWindow
             // Ustaw ramkę
             var brField = chatObj.GetType().GetField("showBorder", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
             if (brField != null) brField.SetValue(chatObj, showBorder);
-
-            // Text only
-            var toField = chatObj.GetType().GetField("textOnly", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-            if (toField != null) toField.SetValue(chatObj, textOnly);
 
             // Rozmiary okna
             var rectField = chatObj.GetType().GetField("windowRect", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);

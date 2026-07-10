@@ -14,7 +14,6 @@ The mod communicates with a backend service that proxies YouTube's live chat API
 - **Real-time Message Rendering** — Messages appear in a scrollable in-game window
 - **Auto-scroll to Latest** — Always shows the newest messages at the bottom
 - **Text Wrapping** — Long messages wrap to multiple lines automatically
-- **Nickname Colors** — Unique colors for each user (hash-based, persistent)
 
 ### Customization
 - **Window Opacity** — Adjust transparency from 0-100% so you can see the game behind the chat
@@ -23,14 +22,9 @@ The mod communicates with a backend service that proxies YouTube's live chat API
 - **Window Locking** — Lock the window position to prevent accidental moving
 
 ### Auto-Management
-- **Auto-hide** — Automatically hide the chat window after a configurable timeout (0-30 seconds)
+- **Auto-hide** — Automatically hide the chat window after a configurable timeout
 - **Auto-show on Messages** — Chat window automatically appears when new messages arrive
-- **Refresh Interval** — Control how often the mod checks for new messages (0.5-10 seconds)
-
-### Visual Effects
-- **New Message Flash** — Optional yellow text flash effect when new messages appear
-- **Text-Only Mode** — Minimal UI for less visual clutter
-- **Color Nicknames Toggle** — Enable/disable nickname colors
+- **Refresh Interval** — Control how often the mod checks for new messages
 
 ## Installation
 
@@ -70,18 +64,22 @@ Settings are saved to: `GameData/YTChatKSP/PluginData/settings.cfg`
 
 You can manually edit this file if needed:
 ```
-Opacity=0.85
-FontSize=14
-FontColor=1.0,1.0,1.0
-WindowWidth=420
-WindowHeight=300
-AutoHide=True
-AutoHideTime=10
-RefreshInterval=2
-LockWindowPosition=False
-ColorNicknames=True
-FlashNewMessage=True
-TextOnlyMode=False
+{
+  "Opacity": 0.85,
+  "FontSize": 14,
+  "FontColorR": 1.0,
+  "FontColorG": 1.0,
+  "FontColorB": 1.0,
+  "WindowWidth": 420,
+  "WindowHeight": 300,
+  "ShowBorder": true,
+  "AutoHide": false,
+  "AutoHideTime": 10,
+  "AutoHideSeconds": 0,
+  "RefreshInterval": 3,
+  "LockWindowPosition": false,
+  "MessageLimit": 50
+}
 ```
 
 ## Backend API Setup

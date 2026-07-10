@@ -12,18 +12,13 @@ public static class Config
     public static int WindowWidth = 420;
     public static int WindowHeight = 300;
     public static bool AutoHide = false;
-    public static float AutoHideTime = 0f;
-    public static bool ColorNicknames = true;
-    public static bool FlashNewMessage = true;
-    public static bool TextOnlyMode = false;
-    public static float RefreshInterval = 2f;
+    public static float AutoHideTime = 10f;  // Default: 10 seconds (range: 1s-600s)
+    public static float RefreshInterval = 3f; // Default: 3 seconds (reduced for better performance - can be lowered to 1-2s in settings)
     public static bool LockWindowPosition = false;
 
     // Dodatkowe pola dla kompatybilności z różnymi nazwami użytymi w kodzie
     public static bool ShowBorder = true;
     public static float AutoHideSeconds = 0f;
-    public static bool NickColoring = true;
-    public static bool FlashNewMessages = true;
     public static int MessageLimit = 50;
 
     // Dodatkowe reprezentacje koloru (używane przez refleksję w niektórych miejscach)
@@ -80,11 +75,6 @@ public static class Config
             if (TryExtractBool(json, "AutoHide", out bval)) AutoHide = bval;
             if (TryExtractFloat(json, "AutoHideTime", out fval)) AutoHideTime = fval;
             if (TryExtractFloat(json, "AutoHideSeconds", out fval)) AutoHideSeconds = fval;
-            if (TryExtractBool(json, "ColorNicknames", out bval)) ColorNicknames = bval;
-            if (TryExtractBool(json, "NickColoring", out bval)) NickColoring = bval;
-            if (TryExtractBool(json, "FlashNewMessage", out bval)) FlashNewMessage = bval;
-            if (TryExtractBool(json, "FlashNewMessages", out bval)) FlashNewMessages = bval;
-            if (TryExtractBool(json, "TextOnlyMode", out bval)) TextOnlyMode = bval;
             if (TryExtractInt(json, "MessageLimit", out ival)) MessageLimit = ival;
             if (TryExtractFloat(json, "RefreshInterval", out fval)) RefreshInterval = fval;
             if (TryExtractBool(json, "LockWindowPosition", out bval)) LockWindowPosition = bval;
@@ -103,8 +93,6 @@ public static class Config
             // synchronizuj pola kolorów
             FontColorR = FontColor.r; FontColorG = FontColor.g; FontColorB = FontColor.b;
             AutoHideSeconds = AutoHideTime;
-            NickColoring = ColorNicknames;
-            FlashNewMessages = FlashNewMessage;
 
             // Ręczne zbudowanie prostego JSON-a
             var sb = new System.Text.StringBuilder();
@@ -119,11 +107,6 @@ public static class Config
             sb.AppendFormat("\"AutoHide\":{0},", AutoHide.ToString().ToLower());
             sb.AppendFormat("\"AutoHideTime\":{0},", AutoHideTime);
             sb.AppendFormat("\"AutoHideSeconds\":{0},", AutoHideSeconds);
-            sb.AppendFormat("\"ColorNicknames\":{0},", ColorNicknames.ToString().ToLower());
-            sb.AppendFormat("\"NickColoring\":{0},", NickColoring.ToString().ToLower());
-            sb.AppendFormat("\"FlashNewMessage\":{0},", FlashNewMessage.ToString().ToLower());
-            sb.AppendFormat("\"FlashNewMessages\":{0},", FlashNewMessages.ToString().ToLower());
-            sb.AppendFormat("\"TextOnlyMode\":{0},", TextOnlyMode.ToString().ToLower());
             sb.AppendFormat("\"MessageLimit\":{0},", MessageLimit);
             sb.AppendFormat("\"RefreshInterval\":{0},", RefreshInterval);
             sb.AppendFormat("\"LockWindowPosition\":{0}", LockWindowPosition.ToString().ToLower());

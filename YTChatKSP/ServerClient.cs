@@ -95,6 +95,7 @@ public static class ServerClient
 
         using (UnityWebRequest www = UnityWebRequest.Get(url))
         {
+            www.timeout = 1; // Timeout po 1 sekundzie - szybko fail jeśli serwer nie dostępny
             www.downloadHandler = new DownloadHandlerBuffer();
             yield return www.SendWebRequest();
 
@@ -146,6 +147,7 @@ public static class ServerClient
 
         using (UnityWebRequest www = new UnityWebRequest(url, "POST"))
         {
+            www.timeout = 5; // Timeout po 5 sekundach
             www.uploadHandler = new UploadHandlerRaw(bodyRaw);
             www.uploadHandler.contentType = "application/json";
             www.downloadHandler = new DownloadHandlerBuffer();
@@ -194,8 +196,25 @@ public static class ServerClient
 
                 // Parsuj każde pole (obsługuj zarówno "id" jak i "Id")
                 string id = ExtractJsonString(body, "id") ?? ExtractJsonString(body, "Id") ?? "";
-                string nick = ExtractJsonString(body, "nick") ?? ExtractJsonString(body, "Nick") ?? ExtractJsonString(body, "author") ?? "Unknown";
+                string nick = ExtractJsonString(body, "nick") ?? ExtractJsonString(body, "Nick") ?? ExtractJsonString(body, "author") ?? "";
                 string text = ExtractJsonString(body, "text") ?? ExtractJsonString(body, "Text") ?? ExtractJsonString(body, "message") ?? "";
+
+                // DEBUG: sprawdź co jest w body
+                if (string.IsNullOrEmpty(nick) && !string.IsNullOrEmpty(text))
+                {
+                    LogToFile($"DEBUG: Extracting nick from text: '{text}'");
+                    int colonIndex = text.IndexOf(':');
+                    if (colonIndex > 0 && colonIndex < text.Length - 1)
+                    {
+                        nick = text.Substring(0, colonIndex).Trim();
+                        text = text.Substring(colonIndex + 1).Trim();
+                        LogToFile($"DEBUG: Extracted nick='{nick}' text='{text}'");
+                    }
+                }
+
+                // Fallback na "Unknown" jeśli nick pusty
+                if (string.IsNullOrEmpty(nick))
+                    nick = "Unknown";
                 string timestamp = ExtractJsonString(body, "timestamp") ?? ExtractJsonString(body, "Timestamp") ?? "";
 
                 if (string.IsNullOrEmpty(text))

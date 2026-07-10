@@ -17,18 +17,12 @@ Welcome to YTChatKSP v1.0.0 — the first official release of YouTube Chat integ
 - ✅ **Window Size** — Customize dimensions (200-1200px wide, 100-800px tall)
 - ✅ **Font Size & Color** — Full RGB color control (10-40px size)
 - ✅ **Text Wrapping** — Automatic line wrapping for long messages
-- ✅ **Nickname Colors** — Hash-based persistent colors for usernames
 
 ### Auto-Management
-- ✅ **Auto-hide Timeout** — Hide window after inactivity (0-30 seconds)
+- ✅ **Auto-hide Timeout** — Hide window after inactivity
 - ✅ **Auto-show on Messages** — Chat window appears when new messages arrive
-- ✅ **Refresh Interval** — Configurable message fetch rate (0.5-10 seconds)
+- ✅ **Refresh Interval** — Configurable message fetch rate
 - ✅ **Window Locking** — Prevent accidental window dragging
-
-### Visual Effects
-- ✅ **New Message Flash** — Optional yellow text effect for new messages
-- ✅ **Color Nicknames** — Enable/disable nickname coloring
-- ✅ **Text-Only Mode** — Minimal UI mode
 
 ### Settings Persistence
 - ✅ **Auto-save Settings** — All configuration saved to `settings.cfg`

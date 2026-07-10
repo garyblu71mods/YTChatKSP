@@ -5,22 +5,26 @@ using UnityEngine;
 // Pola: Nick, Text, NickColor, IsNew
 // Konstruktor ustawia NickColor na podstawie hasha nicku
 public class ChatMessage
-{
-    // Nick autora
-    public string Nick;
+    {
+        // Unikalny ID wiadomości
+        public string Id;
 
-    // Treść wiadomości
-    public string Text;
+        // Nick autora
+        public string Nick;
 
-    // Kolor przypisany do nicku
-    public Color NickColor;
+        // Treść wiadomości
+        public string Text;
+
+        // Kolor przypisany do nicku
+        public Color NickColor;
 
     // Flaga czy wiadomość jest nowa (może służyć do migania)
     public bool IsNew;
 
     // Konstruktor
-    public ChatMessage(string nick, string text, bool isNew = false)
+    public ChatMessage(string nick, string text, bool isNew = false, string id = null)
     {
+        Id = id ?? System.Guid.NewGuid().ToString();
         Nick = nick ?? string.Empty;
         Text = text ?? string.Empty;
         IsNew = isNew;

@@ -11,9 +11,6 @@ public class YTChatKSPMain : MonoBehaviour
     private ReplyWindow replyWindow;
     private SettingsWindow settingsWindow;
 
-    private float messageTimer = 0f;
-    private float messageInterval = 2f;
-
     private ApplicationLauncherButton appButton;
     private Texture2D iconTexture;
 
@@ -51,14 +48,18 @@ public class YTChatKSPMain : MonoBehaviour
         replyWindow = new ReplyWindow();
         settingsWindow = new SettingsWindow();
 
-        // Wire up Settings button callback
-        chatWindow.OnOpenSettings = () => settingsWindow.Visible = true;
+        // Connect Settings button callback
+        chatWindow.OnOpenSettings = () =>
+        {
+            if (settingsWindow != null)
+            {
+                settingsWindow.Visible = !settingsWindow.Visible;
+                Debug.Log("[YTChatKSP] Settings window toggled: " + settingsWindow.Visible);
+            }
+        };
 
-        iconTexture = new Texture2D(38, 38);
-        for (int x = 0; x < iconTexture.width; x++)
-            for (int y = 0; y < iconTexture.height; y++)
-                iconTexture.SetPixel(x, y, new Color(0.9f, 0.2f, 0.2f, 1f));
-        iconTexture.Apply();
+        // Spróbuj załadować ikonę z pliku
+        iconTexture = LoadIconTexture();
 
         if (!TryInitToolbarControl())
         {
@@ -67,6 +68,31 @@ public class YTChatKSPMain : MonoBehaviour
         }
 
         initialized = true;
+    }
+
+    private Texture2D LoadIconTexture()
+    {
+        try
+        {
+            // Spróbuj załadować z GameData/YTChatKSP/icon.png
+            string iconPath = KSPUtil.ApplicationRootPath + "GameData/YTChatKSP/icon.png";
+
+            if (System.IO.File.Exists(iconPath))
+            {
+                Debug.Log("[YTChatKSP] Icon file exists at: " + iconPath);
+                // PNG ładowanie może powodować perf issues - zamiast tego zwróć null
+                // KSP będzie używał domyślnej ikony
+                return null;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError("[YTChatKSP] Exception in LoadIconTexture: " + ex.Message);
+        }
+
+        // Zwróć null - KSP będzie używał domyślnej białej ikony
+        Debug.Log("[YTChatKSP] No custom icon, using default");
+        return null;
     }
 
     private bool TryInitToolbarControl()
@@ -137,36 +163,33 @@ public class YTChatKSPMain : MonoBehaviour
 
     private void OnToolbarLeftClick()
     {
+        Debug.Log("[YTChatKSP] OnToolbarLeftClick called - toggling visibility");
+        if (chatWindow == null)
+        {
+            Debug.LogError("[YTChatKSP] OnToolbarLeftClick: chatWindow is null!");
+            return;
+        }
         chatWindow.Visible = !chatWindow.Visible;
+        Debug.Log("[YTChatKSP] chatWindow.Visible now: " + chatWindow.Visible);
     }
 
     void Update()
     {
-        // Zaktualizuj interval z Config
-        messageInterval = Config.RefreshInterval;
-
-        messageTimer += Time.deltaTime;
-        if (messageTimer >= messageInterval)
-        {
-            messageTimer = 0f;
-            try
-            {
-                var scType = Type.GetType("ServerClient");
-                if (scType != null)
-                {
-                    var gm = scType.GetMethod("GetMessages", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                    gm?.Invoke(null, null);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.Log("[YTChatKSP] GetMessages failed: " + ex.Message);
-            }
-        }
+        // GetMessages() jest już wywoływane z ChatWindow.FetchMessagesIfNeeded()
+        // Nie trzeba podwajać tutaj
     }
 
     void OnGUI()
     {
+        PerformanceMonitor.Instance.OnFrameBegin();
+
+        // Null safety checks - prevent errors if initialization failed
+        if (chatWindow == null || replyWindow == null || settingsWindow == null)
+        {
+            PerformanceMonitor.Instance.OnFrameEnd();
+            return;
+        }
+
         try
         {
             var ctb = Type.GetType("ClickThroughBlocker, Assembly-CSharp")
@@ -187,6 +210,8 @@ public class YTChatKSPMain : MonoBehaviour
                 settingsWindow.Draw();
 
                 end?.Invoke(null, null);
+
+                PerformanceMonitor.Instance.OnFrameEnd();
                 return;
             }
         }
@@ -195,6 +220,8 @@ public class YTChatKSPMain : MonoBehaviour
         chatWindow.Draw();
         replyWindow.Draw();
         settingsWindow.Draw();
+
+        PerformanceMonitor.Instance.OnFrameEnd();
     }
 
     void OnDestroy()
@@ -220,6 +247,7 @@ public class YTChatKSPMain : MonoBehaviour
         private Color currentFontColor = Color.white;
         private bool currentLockPosition = false;
         private float autoHideTimer = 0f;
+        private float lastConfigApplyTime = 0f; // Timer for config refresh throttling
 
         // Lista wiadomości wyświetlanych w oknie
         private List<ChatMessage> displayedMessages = new List<ChatMessage>();
@@ -227,8 +255,11 @@ public class YTChatKSPMain : MonoBehaviour
         private Vector2 scrollPosition = Vector2.zero;
         private int lastMessageCount = 0;
         private bool shouldScrollToBottom = false;
-        private float flashTimer = 0f;
-        private bool isFlashing = false;
+
+        // Cached reflection for performance
+        private Type serverClientType = null;
+        private MethodInfo getMessagesMethod = null;
+        private bool reflectionCached = false;
 
         private static string logPath = @"C:\Users\grzeg\YTChatKSP_Debug.log";
 
@@ -267,6 +298,37 @@ public class YTChatKSPMain : MonoBehaviour
 
         private void ApplyConfigSettings()
         {
+            // Throttle config refresh to reduce frame overhead - only apply every 1 second for snappier UI response
+            float timeSinceLastApply = Time.time - lastConfigApplyTime;
+            if (timeSinceLastApply < 1f)
+            {
+                // Only apply opacity/position/size which are cheap operations
+                currentOpacity = Config.Opacity;
+                currentLockPosition = Config.LockWindowPosition;
+                windowRect.width = Config.WindowWidth;
+                windowRect.height = Config.WindowHeight;
+
+                // Check auto-hide timer even if we skip other updates
+                if (Config.AutoHide && Config.AutoHideTime > 0 && Visible)
+                {
+                    autoHideTimer += Time.deltaTime;
+                    if (autoHideTimer >= Config.AutoHideTime)
+                    {
+                        Visible = false;
+                        autoHideTimer = 0f;
+                    }
+                }
+                else if (!Config.AutoHide)
+                {
+                    autoHideTimer = 0f;
+                }
+
+                return; // Skip expensive operations (font updates, message fetching)
+            }
+
+            // Full config update once per second
+            lastConfigApplyTime = Time.time;
+
             currentOpacity = Config.Opacity;
             currentFontSize = Config.FontSize;
             currentFontColor = Config.FontColor;
@@ -276,7 +338,7 @@ public class YTChatKSPMain : MonoBehaviour
             windowRect.width = Config.WindowWidth;
             windowRect.height = Config.WindowHeight;
 
-            // Auto-hide timer - resetuj timer TYLKO gdy pojawią się NOWE wiadomości
+            // Auto-hide timer - liczy się tylko gdy AutoHide jest aktywny
             if (Config.AutoHide && Config.AutoHideTime > 0 && Visible)
             {
                 // Odmierzaj czas
@@ -293,7 +355,7 @@ public class YTChatKSPMain : MonoBehaviour
                 autoHideTimer = 0f;
             }
 
-            // Pobierz wiadomości z ServerClient
+            // Pobierz wiadomości z ServerClient (expensive operation - do this once per second)
             FetchMessages();
         }
 
@@ -301,18 +363,21 @@ public class YTChatKSPMain : MonoBehaviour
         {
             try
             {
-                // Pobierz wiadomo?ci z ServerClient za pomoc? refleksji
-                var scType = Type.GetType("ServerClient");
-                if (scType == null)
+                // Cache reflection results on first call
+                if (!reflectionCached)
                 {
-                    LogToFile("ServerClient type not found");
-                    return;
+                    serverClientType = Type.GetType("ServerClient");
+                    if (serverClientType != null)
+                    {
+                        getMessagesMethod = serverClientType.GetMethod("GetMessages", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+                    }
+                    reflectionCached = true;
                 }
 
-                var getMessagesMethod = scType.GetMethod("GetMessages", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-                if (getMessagesMethod == null)
+                // Use cached values
+                if (serverClientType == null || getMessagesMethod == null)
                 {
-                    LogToFile("GetMessages method not found");
+                    LogToFile("ServerClient or GetMessages not found");
                     return;
                 }
 
@@ -356,19 +421,13 @@ public class YTChatKSPMain : MonoBehaviour
                         shouldScrollToBottom = true;
                         lastMessageCount = messageCount;
 
-                        // Pokaż chat gdy pojawią się nowe wiadomości
-                        if (Config.AutoHide)
-                        {
-                            Visible = true;
-                            autoHideTimer = 0f;  // Reset timer
-                        }
+                        LogToFile($"New messages! Showing window and resetting auto-hide timer");
 
-                        // Fleszuj okno gdy pojawia sie nowa wiadomosc
-                        if (Config.FlashNewMessage)
-                        {
-                            isFlashing = true;
-                            flashTimer = 0f;
-                        }
+                        // Pokaż chat gdy pojawią się nowe wiadomości - ZAWSZE włącz okno
+                        Visible = true;
+
+                        // Resetuj timer przy nowej wiadomości - licznik zacznie się od nowa
+                        autoHideTimer = 0f;
                     }
                 }
                 else
@@ -391,23 +450,6 @@ public class YTChatKSPMain : MonoBehaviour
             // Zastosuj font size i color z Config
             GUI.skin.label.fontSize = currentFontSize;
             GUI.skin.label.normal.textColor = currentFontColor;
-
-            // Flash new message - fleszuj tekst gdy nowa wiadomosc
-            if (Config.FlashNewMessage && isFlashing)
-            {
-                flashTimer += Time.deltaTime;
-                if (flashTimer > 0.5f)
-                {
-                    // Przywroc normalny kolor
-                    isFlashing = false;
-                    flashTimer = 0f;
-                }
-                else if (flashTimer < 0.25f)
-                {
-                    // Fleszuj tekstem - zmieniaj na zolty
-                    GUI.skin.label.normal.textColor = new Color(1f, 1f, 0f, 1f);  // Zolty flash dla tekstu
-                }
-            }
 
             // Top button bar
             GUILayout.BeginHorizontal();
@@ -554,9 +596,21 @@ public class YTChatKSPMain : MonoBehaviour
 
             GUILayout.Space(10);
 
-            // Auto-hide timeout
-            GUILayout.Label("Auto-hide Timeout: " + Config.AutoHideTime.ToString("F1") + " sec", GUILayout.Height(20));
-            Config.AutoHideTime = GUILayout.HorizontalSlider(Config.AutoHideTime, 0f, 30f, GUILayout.Height(20));
+            // Auto-hide timeout (1s to 10 min)
+            float timeoutSeconds = Config.AutoHideTime;
+            string timeoutDisplay;
+            if (timeoutSeconds < 60f)
+            {
+                timeoutDisplay = timeoutSeconds.ToString("F1") + " sec";
+            }
+            else
+            {
+                float minutes = timeoutSeconds / 60f;
+                timeoutDisplay = minutes.ToString("F1") + " min";
+            }
+
+            GUILayout.Label("Auto-hide Timeout: " + timeoutDisplay, GUILayout.Height(20));
+            Config.AutoHideTime = GUILayout.HorizontalSlider(Config.AutoHideTime, 1f, 600f, GUILayout.Height(20));
 
             GUILayout.Space(10);
 
@@ -581,28 +635,6 @@ public class YTChatKSPMain : MonoBehaviour
             GUILayout.EndHorizontal();
 
             GUILayout.Space(10);
-
-            // Nick coloring
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Color Nicknames:", GUILayout.Width(150));
-            Config.ColorNicknames = GUILayout.Toggle(Config.ColorNicknames, "", GUILayout.Width(30));
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(10);
-
-            // Flash new messages
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Flash New Messages:", GUILayout.Width(150));
-            Config.FlashNewMessage = GUILayout.Toggle(Config.FlashNewMessage, "", GUILayout.Width(30));
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(10);
-
-            // Text only mode
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Text Only Mode:", GUILayout.Width(150));
-            Config.TextOnlyMode = GUILayout.Toggle(Config.TextOnlyMode, "", GUILayout.Width(30));
-            GUILayout.EndHorizontal();
 
             GUILayout.EndScrollView();
 
@@ -636,10 +668,7 @@ public class YTChatKSPMain : MonoBehaviour
             Config.WindowWidth = 420;
             Config.WindowHeight = 300;
             Config.AutoHide = false;
-            Config.AutoHideTime = 0f;
-            Config.ColorNicknames = true;
-            Config.FlashNewMessage = true;
-            Config.TextOnlyMode = false;
+            Config.AutoHideTime = 10f;
             Config.RefreshInterval = 2f;
             Config.LockWindowPosition = false;
             Config.Save();
