@@ -77,12 +77,15 @@ public class YTChatKSPMain : MonoBehaviour
             // Spróbuj załadować z GameData/YTChatKSP/icon.png
             string iconPath = KSPUtil.ApplicationRootPath + "GameData/YTChatKSP/icon.png";
 
-            if (System.IO.File.Exists(iconPath))
+             if (System.IO.File.Exists(iconPath))
             {
                 Debug.Log("[YTChatKSP] Icon file exists at: " + iconPath);
-                // PNG ładowanie może powodować perf issues - zamiast tego zwróć null
-                // KSP będzie używał domyślnej ikony
-                return null;
+
+                // Use GameDatabase to load texture
+                Texture2D tex = GameDatabase.Instance.GetTexture("YTChatKSP/icon", false);
+
+                Debug.Log("[YTChatKSP] Icon loaded successfully");
+                return tex;
             }
         }
         catch (System.Exception ex)
