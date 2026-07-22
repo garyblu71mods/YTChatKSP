@@ -59,7 +59,7 @@ public class YTChatKSPMain : MonoBehaviour
         };
 
         // Spróbuj załadować ikonę z pliku
-        iconTexture = LoadIconTexture();
+        iconTexture = null; // Load later in OnGUIAppLauncherReady
 
         if (!TryInitToolbarControl())
         {
@@ -78,19 +78,40 @@ public class YTChatKSPMain : MonoBehaviour
             string iconPath = KSPUtil.ApplicationRootPath + "GameData/YTChatKSP/icon.png";
 
              if (System.IO.File.Exists(iconPath))
-            {
-                Debug.Log("[YTChatKSP] Icon file exists at: " + iconPath);
+             {
+                 Debug.Log("[YTChatKSP] Icon file exists at: " + iconPath);
 
-                // Use GameDatabase to load texture
-                Texture2D tex = GameDatabase.Instance.GetTexture("YTChatKSP/icon", false);
+                 // Try GameDatabase with correct path format
+                 Debug.Log("[YTChatKSP] Trying to load from GameDatabase");
+                 Texture2D tex = GameDatabase.Instance.GetTexture("YTChatKSP/icon", false);
+                 if (tex != null)
+                 {
+                     Debug.Log("[YTChatKSP] Icon loaded from GameDatabase");
+                     return tex;
+                 }
 
-                Debug.Log("[YTChatKSP] Icon loaded successfully");
-                return tex;
-            }
+                 // Fallback: create a white texture if GameDatabase fails
+                 Debug.Log("[YTChatKSP] GameDatabase returned null, creating default white texture");
+                 Texture2D customTex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+                 Color[] pixels = new Color[32 * 32];
+                 for (int i = 0; i < pixels.Length; i++)
+                 {
+                     pixels[i] = new Color(1f, 1f, 1f, 1f); // White
+                 }
+                 customTex.SetPixels(pixels);
+                 customTex.Apply();
+
+                 Debug.Log("[YTChatKSP] Default white texture created");
+                 return customTex;
+             }
+             else
+             {
+                 Debug.Log("[YTChatKSP] Icon file NOT found at: " + iconPath);
+             }
         }
         catch (System.Exception ex)
         {
-            Debug.LogError("[YTChatKSP] Exception in LoadIconTexture: " + ex.Message);
+            Debug.LogError("[YTChatKSP] Exception in LoadIconTexture: " + ex.Message + "\n" + ex.StackTrace);
         }
 
         // Zwróć null - KSP będzie używał domyślnej białej ikony
@@ -152,6 +173,12 @@ public class YTChatKSPMain : MonoBehaviour
     private void OnGUIAppLauncherReady()
     {
         if (appButton != null) return;
+
+        // Load icon texture now that toolbar is ready
+        if (iconTexture == null)
+        {
+            iconTexture = LoadIconTexture();
+        }
 
         appButton = ApplicationLauncher.Instance.AddModApplication(
             OnToolbarLeftClick,
