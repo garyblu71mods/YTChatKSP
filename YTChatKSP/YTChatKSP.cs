@@ -481,6 +481,9 @@ public class YTChatKSPMain : MonoBehaviour
                 return;
             }
 
+            // Ensure style has correct font size
+            style.fontSize = currentFontSize;
+
             // Calculate text size
             GUIContent content = new GUIContent(text);
             Vector2 textSize = style.CalcSize(content);
