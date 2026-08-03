@@ -9,15 +9,18 @@ public class SettingsWindow
     public bool Visible { get; set; } = false;
 
     private Rect windowRect = new Rect(10, 390, 320, 220);
+    private const string ReleaseDate = "2026-08-03 21:30"; // Release date and time
 
     // Ustawienia lokalne przechowywane w oknie
     private float opacity = 1f;
-    private int fontSize = 12;
-    private Color fontColor = Color.white;
     private int windowWidth = 420;
     private int windowHeight = 300;
-    private bool showBorder = true;
+    private int fontSize = 12;
+    private Color fontColor = Color.white;
     private float autoHideSeconds = 0f;
+    private bool autoHideEnabled = false;
+    private float refreshInterval = 5f;
+    private bool lockWindowPosition = false;
     private float textBackgroundOpacity = 0.3f;
 
     public SettingsWindow()
@@ -29,46 +32,67 @@ public class SettingsWindow
     public void Draw()
     {
         if (!Visible) return;
-        windowRect = GUILayout.Window(GetWindowId(), windowRect, OnWindow, "Settings");
+
+        // Ensure settings window is fully opaque (not affected by chat window opacity)
+        Color originalColor = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, 1f);
+
+        string windowTitle = $"Settings [{ReleaseDate}]";
+        windowRect = GUILayout.Window(GetWindowId(), windowRect, OnWindow, windowTitle);
+
+        GUI.color = originalColor;
     }
 
     private int GetWindowId() => "YTSettingsWindow".GetHashCode();
 
     private void OnWindow(int id)
     {
-        GUILayout.BeginVertical();
+        GUILayout.BeginVertical(GUILayout.Height(380));
 
-        GUILayout.Label("Opacity");
-        opacity = GUILayout.HorizontalSlider(opacity, 0.1f, 1f);
+        // 1. Opacity
+        GUILayout.Label("Opacity", GUILayout.Height(14));
+        opacity = GUILayout.HorizontalSlider(opacity, 0.1f, 1f, GUILayout.Height(10));
 
-        GUILayout.Label($"Font Size: {fontSize}");
-        fontSize = (int)GUILayout.HorizontalSlider(fontSize, 8, 32);
+        // 2. Text Background Opacity
+        GUILayout.Label("Text Background Opacity", GUILayout.Height(14));
+        textBackgroundOpacity = GUILayout.HorizontalSlider(textBackgroundOpacity, 0f, 1f, GUILayout.Height(10));
 
-        GUILayout.Label("Font Color");
-        // Simple color picker using RGB sliders (runtime Unity doesn't have Editor color picker)
-        fontColor.r = GUILayout.HorizontalSlider(fontColor.r, 0f, 1f);
-        fontColor.g = GUILayout.HorizontalSlider(fontColor.g, 0f, 1f);
-        fontColor.b = GUILayout.HorizontalSlider(fontColor.b, 0f, 1f);
-        GUILayout.Box(" ", GUILayout.Width(20), GUILayout.Height(20));
+        // 3. Window Width
+        GUILayout.Label($"Window Width: {windowWidth}", GUILayout.Height(14));
+        windowWidth = (int)GUILayout.HorizontalSlider(windowWidth, 200, 800, GUILayout.Height(10));
 
-        GUILayout.Label("Window Size");
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("W", GUILayout.Width(20));
-        windowWidth = (int)GUILayout.HorizontalSlider(windowWidth, 200, 800);
-        GUILayout.Label("H", GUILayout.Width(20));
-        windowHeight = (int)GUILayout.HorizontalSlider(windowHeight, 100, 800);
-        GUILayout.EndHorizontal();
+        // 4. Window Height
+        GUILayout.Label($"Window Height: {windowHeight}", GUILayout.Height(14));
+        windowHeight = (int)GUILayout.HorizontalSlider(windowHeight, 100, 800, GUILayout.Height(10));
 
-        showBorder = GUILayout.Toggle(showBorder, "Show border");
-        GUILayout.Label("Auto-hide seconds (0 = off)");
-        autoHideSeconds = GUILayout.HorizontalSlider(autoHideSeconds, 0f, 600f);
+        // 5. Font Size
+        GUILayout.Label($"Font Size: {fontSize}", GUILayout.Height(14));
+        fontSize = (int)GUILayout.HorizontalSlider(fontSize, 8, 32, GUILayout.Height(10));
 
-        GUILayout.Label("Text Background Opacity");
-        textBackgroundOpacity = GUILayout.HorizontalSlider(textBackgroundOpacity, 0f, 1f);
+        // 6. Font Color (RGB)
+        GUILayout.Label("Font Color (RGB)", GUILayout.Height(14));
+        fontColor.r = GUILayout.HorizontalSlider(fontColor.r, 0f, 1f, GUILayout.Height(10));
+        fontColor.g = GUILayout.HorizontalSlider(fontColor.g, 0f, 1f, GUILayout.Height(10));
+        fontColor.b = GUILayout.HorizontalSlider(fontColor.b, 0f, 1f, GUILayout.Height(10));
+        GUILayout.Box(" ", GUILayout.Width(20), GUILayout.Height(10));
 
-        GUILayout.Space(6);
+        // 7. Auto-hide seconds
+        GUILayout.Label($"Auto-hide seconds: {autoHideSeconds:F0}", GUILayout.Height(14));
+        autoHideSeconds = GUILayout.HorizontalSlider(autoHideSeconds, 0f, 600f, GUILayout.Height(10));
 
-        GUILayout.BeginHorizontal();
+        // 8. Enable Auto-hide
+        autoHideEnabled = GUILayout.Toggle(autoHideEnabled, "Enable Auto-hide", GUILayout.Height(14));
+
+        // 9. Refresh Interval
+        GUILayout.Label($"Refresh Interval: {refreshInterval:F1}s", GUILayout.Height(14));
+        refreshInterval = GUILayout.HorizontalSlider(refreshInterval, 1f, 60f, GUILayout.Height(10));
+
+        // 10. Lock Window Position
+        lockWindowPosition = GUILayout.Toggle(lockWindowPosition, "Lock Window Position", GUILayout.Height(14));
+
+        GUILayout.FlexibleSpace();
+
+        GUILayout.BeginHorizontal(GUILayout.Height(20));
         if (GUILayout.Button("Save"))
         {
             SaveToConfig();
@@ -125,13 +149,15 @@ public class SettingsWindow
             });
 
             opacity = getFloat("Opacity");
+            var ww = getInt("WindowWidth"); if (ww > 0) windowWidth = ww;
+            var wh = getInt("WindowHeight"); if (wh > 0) windowHeight = wh;
             var fs = getInt("FontSize"); if (fs > 0) fontSize = fs;
             float fr = getFloat("FontColorR"); float fg = getFloat("FontColorG"); float fb = getFloat("FontColorB");
             if (fr != 0 || fg != 0 || fb != 0) fontColor = new Color(fr, fg, fb);
-            var ww = getInt("WindowWidth"); if (ww > 0) windowWidth = ww;
-            var wh = getInt("WindowHeight"); if (wh > 0) windowHeight = wh;
-            showBorder = getBool("ShowBorder");
             autoHideSeconds = getFloat("AutoHideSeconds");
+            autoHideEnabled = getBool("AutoHide");
+            refreshInterval = getFloat("RefreshInterval");
+            lockWindowPosition = getBool("LockWindowPosition");
             textBackgroundOpacity = getFloat("TextBackgroundOpacity");
         }
         catch (Exception ex)
@@ -157,25 +183,22 @@ public class SettingsWindow
             };
 
             setValue("Opacity", opacity);
+            setValue("WindowWidth", windowWidth);
+            setValue("WindowHeight", windowHeight);
             setValue("FontSize", fontSize);
             setValue("FontColorR", fontColor.r);
             setValue("FontColorG", fontColor.g);
             setValue("FontColorB", fontColor.b);
-            setValue("WindowWidth", windowWidth);
-            setValue("WindowHeight", windowHeight);
-            setValue("ShowBorder", showBorder);
             setValue("AutoHideSeconds", autoHideSeconds);
+            setValue("AutoHide", autoHideEnabled);
+            setValue("RefreshInterval", refreshInterval);
+            setValue("LockWindowPosition", lockWindowPosition);
             setValue("TextBackgroundOpacity", textBackgroundOpacity);
 
-            // Synchronizuj AutoHideTime i AutoHide bool na podstawie AutoHideSeconds
+            // Synchronizuj AutoHideTime na podstawie AutoHideSeconds
             if (autoHideSeconds > 0)
             {
                 setValue("AutoHideTime", autoHideSeconds);
-                setValue("AutoHide", true);
-            }
-            else
-            {
-                setValue("AutoHide", false);
             }
 
             // Jeśli Config ma metodę Save lub SaveConfig -> wywołaj
@@ -240,10 +263,6 @@ public class SettingsWindow
             // Ustaw opacity
             var opField = chatObj.GetType().GetField("opacity", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
             if (opField != null) opField.SetValue(chatObj, opacity);
-
-            // Ustaw ramkę
-            var brField = chatObj.GetType().GetField("showBorder", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-            if (brField != null) brField.SetValue(chatObj, showBorder);
 
             // Rozmiary okna
             var rectField = chatObj.GetType().GetField("windowRect", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);

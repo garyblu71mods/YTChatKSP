@@ -278,12 +278,14 @@ public class YTChatKSPMain : MonoBehaviour
         private bool currentLockPosition = false;
         private float autoHideTimer = 0f;
         private float lastConfigApplyTime = 0f; // Timer for config refresh throttling
+        private float lastFetchTime = 0f; // Timer for message refresh (RefreshInterval)
 
         // Lista wiadomości wyświetlanych w oknie
         private List<ChatMessage> displayedMessages = new List<ChatMessage>();
         private List<string> cachedMessageLines = new List<string>();
         private Vector2 scrollPosition = Vector2.zero;
         private int lastMessageCount = 0;
+        private string lastMessagesHash = ""; // Track last message content to detect NEW messages
         private bool shouldScrollToBottom = false;
 
         // Cached reflection for performance
@@ -385,8 +387,13 @@ public class YTChatKSPMain : MonoBehaviour
                 autoHideTimer = 0f;
             }
 
-            // Pobierz wiadomości z ServerClient (expensive operation - do this once per second)
-            FetchMessages();
+            // Pobierz wiadomości z ServerClient - throttle based on RefreshInterval
+            float timeSinceFetch = Time.time - lastFetchTime;
+            if (timeSinceFetch >= Config.RefreshInterval)
+            {
+                lastFetchTime = Time.time;
+                FetchMessages();
+            }
         }
 
         private void FetchMessages()
@@ -445,18 +452,23 @@ public class YTChatKSPMain : MonoBehaviour
                 if (messageCount > 0)
                 {
                     LogToFile($"Successfully displayed {messageCount} messages");
-                    // Jesli liczba wiadomosci sie zmienila, scroll na dol
-                    if (messageCount != lastMessageCount)
+
+                    // Create hash of all messages to detect NEW content (not just count change)
+                    string currentHash = string.Join("|", cachedMessageLines);
+
+                    // If messages changed (new content or order), reset auto-hide timer
+                    if (currentHash != lastMessagesHash)
                     {
+                        lastMessagesHash = currentHash;
                         shouldScrollToBottom = true;
                         lastMessageCount = messageCount;
 
-                        LogToFile($"New messages! Showing window and resetting auto-hide timer");
+                        LogToFile($"New messages detected! Showing window and resetting auto-hide timer");
 
                         // Pokaż chat gdy pojawią się nowe wiadomości - ZAWSZE włącz okno
                         Visible = true;
 
-                        // Resetuj timer przy nowej wiadomości - licznik zacznie się od nowa
+                        // Resetuj timer przy nowej wiadomości
                         autoHideTimer = 0f;
                     }
                 }
