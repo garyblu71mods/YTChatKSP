@@ -481,17 +481,30 @@ public class YTChatKSPMain : MonoBehaviour
                 return;
             }
 
-            // Ensure style has correct font size
+            // Ensure style has correct font size and wordwrap
             style.fontSize = currentFontSize;
+            style.wordWrap = true;
 
-            // Calculate text size
+            // Get available width from options or use default
+            float availableWidth = 300f; // Default fallback
+            foreach (var opt in options)
+            {
+                // Try to extract width from GUILayoutOption
+                // This is approximate - we'll use CalcHeight with a reasonable width
+            }
+
+            // Calculate wrapped text size (use a reasonable max width)
             GUIContent content = new GUIContent(text);
             Vector2 textSize = style.CalcSize(content);
 
-            // Get the rect for the background (only as wide as the text)
-            Rect bgRect = GUILayoutUtility.GetRect(textSize.x + 8, textSize.y + 4);
+            // For wrapped text, we need to limit the width and recalculate height
+            float maxWidth = 400f; // Approximate window content width
+            float wrappedHeight = style.CalcHeight(content, maxWidth);
 
-            // Draw dark background rectangle
+            // Get rect that respects wordwrap - width = text width, height = wrapped height
+            Rect bgRect = GUILayoutUtility.GetRect(new GUIContent(text), style);
+
+            // Draw dark background rectangle (only under text area)
             Color darkBg = new Color(0, 0, 0, Config.TextBackgroundOpacity);
             Color originalBgColor = GUI.backgroundColor;
             GUI.backgroundColor = darkBg;
