@@ -485,34 +485,25 @@ public class YTChatKSPMain : MonoBehaviour
             style.fontSize = currentFontSize;
             style.wordWrap = true;
 
-            // Get available width from options or use default
-            float availableWidth = 300f; // Default fallback
-            foreach (var opt in options)
-            {
-                // Try to extract width from GUILayoutOption
-                // This is approximate - we'll use CalcHeight with a reasonable width
-            }
-
-            // Calculate wrapped text size (use a reasonable max width)
+            // Draw label first to get its layout rect
             GUIContent content = new GUIContent(text);
-            Vector2 textSize = style.CalcSize(content);
+            GUILayout.Label(text, style, options);
 
-            // For wrapped text, we need to limit the width and recalculate height
-            float maxWidth = 400f; // Approximate window content width
-            float wrappedHeight = style.CalcHeight(content, maxWidth);
+            // Get the rect of what we just drew
+            Rect lastRect = GUILayoutUtility.GetLastRect();
 
-            // Get rect that respects wordwrap - width = text width, height = wrapped height
-            Rect bgRect = GUILayoutUtility.GetRect(new GUIContent(text), style);
+            // Draw dark background rectangle ONLY under the text area
+            if (lastRect.height > 0)
+            {
+                Color darkBg = new Color(0, 0, 0, Config.TextBackgroundOpacity);
+                Color originalBgColor = GUI.backgroundColor;
+                GUI.backgroundColor = darkBg;
 
-            // Draw dark background rectangle (only under text area)
-            Color darkBg = new Color(0, 0, 0, Config.TextBackgroundOpacity);
-            Color originalBgColor = GUI.backgroundColor;
-            GUI.backgroundColor = darkBg;
-            GUI.Box(bgRect, "", GUI.skin.box);
-            GUI.backgroundColor = originalBgColor;
+                // Draw background behind the text we just rendered
+                GUI.Box(lastRect, "", GUI.skin.box);
 
-            // Draw text on top of background
-            GUI.Label(bgRect, text, style);
+                GUI.backgroundColor = originalBgColor;
+            }
         }
 
         private void DrawContents(int id)
