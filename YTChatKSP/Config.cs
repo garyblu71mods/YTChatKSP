@@ -160,16 +160,10 @@ public static class Config
         public float FontColorB = 1f;
         public int WindowWidth = 420;
         public int WindowHeight = 300;
-        public bool ShowFrame = true;
         public bool ShowBorder = true;
         public bool AutoHide = false;
         public float AutoHideTime = 0f;
         public float AutoHideSeconds = 0f;
-        public bool ColorNicknames = true;
-        public bool NickColoring = true;
-        public bool FlashNewMessage = true;
-        public bool FlashNewMessages = true;
-        public bool TextOnlyMode = false;
         public int MessageLimit = 50;
     }
 }

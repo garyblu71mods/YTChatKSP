@@ -18,6 +18,7 @@ public class SettingsWindow
     private int windowHeight = 300;
     private bool showBorder = true;
     private float autoHideSeconds = 0f;
+    private float textBackgroundOpacity = 0.3f;
 
     public SettingsWindow()
     {
@@ -61,6 +62,9 @@ public class SettingsWindow
         showBorder = GUILayout.Toggle(showBorder, "Show border");
         GUILayout.Label("Auto-hide seconds (0 = off)");
         autoHideSeconds = GUILayout.HorizontalSlider(autoHideSeconds, 0f, 600f);
+
+        GUILayout.Label("Text Background Opacity");
+        textBackgroundOpacity = GUILayout.HorizontalSlider(textBackgroundOpacity, 0f, 1f);
 
         GUILayout.Space(6);
 
@@ -128,6 +132,7 @@ public class SettingsWindow
             var wh = getInt("WindowHeight"); if (wh > 0) windowHeight = wh;
             showBorder = getBool("ShowBorder");
             autoHideSeconds = getFloat("AutoHideSeconds");
+            textBackgroundOpacity = getFloat("TextBackgroundOpacity");
         }
         catch (Exception ex)
         {
@@ -160,6 +165,7 @@ public class SettingsWindow
             setValue("WindowHeight", windowHeight);
             setValue("ShowBorder", showBorder);
             setValue("AutoHideSeconds", autoHideSeconds);
+            setValue("TextBackgroundOpacity", textBackgroundOpacity);
 
             // Synchronizuj AutoHideTime i AutoHide bool na podstawie AutoHideSeconds
             if (autoHideSeconds > 0)
