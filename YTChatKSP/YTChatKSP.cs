@@ -471,7 +471,7 @@ public class YTChatKSPMain : MonoBehaviour
             }
         }
 
-        // Draw label with dark background rectangle
+        // Draw label with dark background rectangle (only under text, not full width)
         private void DrawLabelWithBackground(string text, GUIStyle style, params GUILayoutOption[] options)
         {
             if (string.IsNullOrEmpty(text) || Config.TextBackgroundOpacity <= 0.01f)
@@ -481,25 +481,22 @@ public class YTChatKSPMain : MonoBehaviour
                 return;
             }
 
-            // Draw with dark background
+            // Calculate text size
+            GUIContent content = new GUIContent(text);
+            Vector2 textSize = style.CalcSize(content);
+
+            // Get the rect for the background (only as wide as the text)
+            Rect bgRect = GUILayoutUtility.GetRect(textSize.x + 8, textSize.y + 4);
+
+            // Draw dark background rectangle
             Color darkBg = new Color(0, 0, 0, Config.TextBackgroundOpacity);
-
-            // Create box style with dark background
-            GUIStyle boxStyle = new GUIStyle(GUI.skin.box);
-            boxStyle.normal.background = Texture2D.whiteTexture;
-            boxStyle.normal.textColor = currentFontColor;
-            boxStyle.wordWrap = true;
-            boxStyle.padding = new RectOffset(4, 4, 2, 2);
-
-            // Save and set background color
             Color originalBgColor = GUI.backgroundColor;
             GUI.backgroundColor = darkBg;
-
-            // Draw box with text
-            GUILayout.Box(text, boxStyle, options);
-
-            // Restore color
+            GUI.Box(bgRect, "", GUI.skin.box);
             GUI.backgroundColor = originalBgColor;
+
+            // Draw text on top of background
+            GUI.Label(bgRect, text, style);
         }
 
         private void DrawContents(int id)
