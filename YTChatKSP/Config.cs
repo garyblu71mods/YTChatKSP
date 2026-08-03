@@ -26,9 +26,8 @@ public static class Config
     public static float FontColorG = 1f;
     public static float FontColorB = 1f;
 
-    // Text Effects - stroke and shadow for better readability
-    public static float StrokeWidth = 0.5f; // 0.0 - 2.0: thickness of text outline
-    public static float ShadowIntensity = 0.3f; // 0.0 - 1.0: opacity of shadow/background
+    // Text background - dark rectangle behind text for better readability
+    public static float TextBackgroundOpacity = 0.3f; // 0.0 - 1.0: opacity of dark background under text
 
     // Ścieżka do pliku konfiguracji (GameData/YTChatKSP/PluginData/settings.cfg)
     private static string ConfigFilePath
@@ -82,8 +81,7 @@ public static class Config
             if (TryExtractInt(json, "MessageLimit", out ival)) MessageLimit = ival;
             if (TryExtractFloat(json, "RefreshInterval", out fval)) RefreshInterval = fval;
             if (TryExtractBool(json, "LockWindowPosition", out bval)) LockWindowPosition = bval;
-            if (TryExtractFloat(json, "StrokeWidth", out fval)) StrokeWidth = fval;
-            if (TryExtractFloat(json, "ShadowIntensity", out fval)) ShadowIntensity = fval;
+            if (TryExtractFloat(json, "TextBackgroundOpacity", out fval)) TextBackgroundOpacity = fval;
         }
         catch (Exception ex)
         {
@@ -116,8 +114,7 @@ public static class Config
             sb.AppendFormat("\"MessageLimit\":{0},", MessageLimit);
             sb.AppendFormat("\"RefreshInterval\":{0},", RefreshInterval);
             sb.AppendFormat("\"LockWindowPosition\":{0},", LockWindowPosition.ToString().ToLower());
-            sb.AppendFormat("\"StrokeWidth\":{0},", StrokeWidth);
-            sb.AppendFormat("\"ShadowIntensity\":{0}", ShadowIntensity);
+            sb.AppendFormat("\"TextBackgroundOpacity\":{0}", TextBackgroundOpacity);
             sb.Append("}");
 
             File.WriteAllText(ConfigFilePath, sb.ToString(), System.Text.Encoding.UTF8);
