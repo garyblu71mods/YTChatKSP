@@ -507,13 +507,13 @@ public class YTChatKSPMain : MonoBehaviour
 
             foreach (var line in cachedMessageLines)
             {
-                GUILayout.Label(line, labelStyle, GUILayout.ExpandWidth(true));
+                DrawTextWithStrokeAndShadow(line, labelStyle, GUILayout.ExpandWidth(true));
             }
 
             // Jesli brak wiadomosci
             if (cachedMessageLines.Count == 0)
             {
-                GUILayout.Label("Waiting for messages...", labelStyle, GUILayout.ExpandWidth(true));
+                DrawTextWithStrokeAndShadow("Waiting for messages...", labelStyle, GUILayout.ExpandWidth(true));
             }
 
             GUILayout.EndScrollView();
@@ -534,6 +534,62 @@ public class YTChatKSPMain : MonoBehaviour
             // Przywroc oryginalny font size i color na koniec
             GUI.skin.label.fontSize = originalFontSize;
             GUI.skin.label.normal.textColor = originalFontColor;
+        }
+
+        // Helper method to draw text with stroke and shadow effects
+        private void DrawTextWithStrokeAndShadow(string text, GUIStyle style, params GUILayoutOption[] options)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            // Calculate shadow offset (1 pixel per unit)
+            float shadowOff = 1f;
+            float strokeSteps = Mathf.Ceil(Config.StrokeWidth * 4f); // 4 offset directions per unit of stroke
+
+            // Draw shadow background if intensity > 0
+            if (Config.ShadowIntensity > 0.01f)
+            {
+                GUIStyle shadowStyle = new GUIStyle(style);
+                shadowStyle.normal.textColor = new Color(0, 0, 0, Config.ShadowIntensity * 0.5f);
+
+                // Draw shadow slightly offset
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(shadowOff);
+                GUILayout.Label(text, shadowStyle, options);
+                GUILayout.EndHorizontal();
+            }
+
+            // Draw stroke (outline) if width > 0
+            if (Config.StrokeWidth > 0.01f)
+            {
+                GUIStyle strokeStyle = new GUIStyle(style);
+                strokeStyle.normal.textColor = new Color(0, 0, 0, 0.6f);
+
+                // Draw 4-point cross stroke
+                float offset = Config.StrokeWidth * 0.5f;
+
+                // Top
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(0);
+                GUILayout.Label(text, strokeStyle, options);
+                GUILayout.EndHorizontal();
+
+                // Left
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(offset);
+                GUILayout.Label(text, strokeStyle, options);
+                GUILayout.EndHorizontal();
+
+                // Right  
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(-offset);
+                GUILayout.Label(text, strokeStyle, options);
+                GUILayout.EndHorizontal();
+            }
+
+            // Draw final text on top (bright color from Config)
+            GUIStyle finalStyle = new GUIStyle(style);
+            finalStyle.normal.textColor = currentFontColor;
+            GUILayout.Label(text, finalStyle, options);
         }
     }
 
@@ -666,6 +722,18 @@ public class YTChatKSPMain : MonoBehaviour
 
             GUILayout.Space(10);
 
+            // Text Stroke Width
+            GUILayout.Label("Text Stroke Width: " + Config.StrokeWidth.ToString("F2"), GUILayout.Height(20));
+            Config.StrokeWidth = GUILayout.HorizontalSlider(Config.StrokeWidth, 0f, 2f, GUILayout.Height(20));
+
+            GUILayout.Space(10);
+
+            // Shadow Intensity  
+            GUILayout.Label("Shadow Intensity: " + Config.ShadowIntensity.ToString("F2"), GUILayout.Height(20));
+            Config.ShadowIntensity = GUILayout.HorizontalSlider(Config.ShadowIntensity, 0f, 1f, GUILayout.Height(20));
+
+            GUILayout.Space(10);
+
             GUILayout.EndScrollView();
 
             GUILayout.Space(10);
@@ -701,6 +769,8 @@ public class YTChatKSPMain : MonoBehaviour
             Config.AutoHideTime = 10f;
             Config.RefreshInterval = 2f;
             Config.LockWindowPosition = false;
+            Config.StrokeWidth = 0.5f;
+            Config.ShadowIntensity = 0.3f;
             Config.Save();
         }
     }
