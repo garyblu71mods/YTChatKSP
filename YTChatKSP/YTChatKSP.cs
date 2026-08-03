@@ -489,12 +489,17 @@ public class YTChatKSPMain : MonoBehaviour
             GUIContent content = new GUIContent(text);
             Rect bgRect = GUILayoutUtility.GetRect(content, style);
 
-            // Draw dark background rectangle FIRST (underneath)
+            // Calculate actual text width (not full rect width)
+            Vector2 textSize = style.CalcSize(content);
+
+            // Create smaller rect that fits only the text (with small padding)
+            Rect textBgRect = new Rect(bgRect.x, bgRect.y, textSize.x + 4, bgRect.height);
+
+            // Draw dark background rectangle with correct size using GUI.DrawTexture
             Color darkBg = new Color(0, 0, 0, Config.TextBackgroundOpacity);
-            Color originalBgColor = GUI.backgroundColor;
-            GUI.backgroundColor = darkBg;
-            GUI.Box(bgRect, "", GUI.skin.box);
-            GUI.backgroundColor = originalBgColor;
+            GUI.color = darkBg;
+            GUI.DrawTexture(textBgRect, Texture2D.whiteTexture);
+            GUI.color = Color.white;
 
             // Draw text ON TOP of the background
             GUI.Label(bgRect, text, style);
