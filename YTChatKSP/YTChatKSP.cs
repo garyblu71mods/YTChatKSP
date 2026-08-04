@@ -279,6 +279,8 @@ public class YTChatKSPMain : MonoBehaviour
         private float autoHideTimer = 0f;
         private float lastConfigApplyTime = 0f; // Timer for config refresh throttling
         private float lastFetchTime = 0f; // Timer for message refresh (RefreshInterval)
+        private float buttonHoverTimer = 0f; // Timer for button fade in/out (zacznij od 0)
+        private bool buttonsVisible = false; // Track if buttons should be visible (domyślnie ukryte)
 
         // Lista wiadomości wyświetlanych w oknie
         private List<ChatMessage> displayedMessages = new List<ChatMessage>();
@@ -294,11 +296,23 @@ public class YTChatKSPMain : MonoBehaviour
         private bool reflectionCached = false;
 
         private static string logPath = @"C:\Users\grzeg\YTChatKSP_Debug.log";
+        private const long MAX_LOG_SIZE = 500 * 1024 * 1024; // 500 MB
 
         private static void LogToFile(string message)
         {
             try
             {
+                // Check if log file exists and its size
+                if (System.IO.File.Exists(logPath))
+                {
+                    var fileInfo = new System.IO.FileInfo(logPath);
+                    if (fileInfo.Length > MAX_LOG_SIZE)
+                    {
+                        // File is too large, delete it and start fresh
+                        System.IO.File.Delete(logPath);
+                    }
+                }
+
                 string timestamp = System.DateTime.Now.ToString("HH:mm:ss");
                 string logEntry = $"[{timestamp}] [ChatWindow] {message}";
                 System.IO.File.AppendAllText(logPath, logEntry + System.Environment.NewLine);
@@ -324,12 +338,44 @@ public class YTChatKSPMain : MonoBehaviour
 
             windowRect = SafeWindow(WINDOW_ID, windowRect, DrawContents, "YT Chat");
 
+            // Ogranicz pozycję okna do granic ekranu - aby nie wyjechało za krawędzie
+            windowRect.x = Mathf.Clamp(windowRect.x, 0, Screen.width - windowRect.width);
+            windowRect.y = Mathf.Clamp(windowRect.y, 0, Screen.height - windowRect.height);
+
             // Przywroc oryginalny kolor
             GUI.color = originalColor;
         }
 
         private void ApplyConfigSettings()
         {
+            // Sprawdzaj hover nad przyciskami (górna część okna)
+            if (Visible)
+            {
+                // Tworzymy rect dla przycisku area (górna część okna)
+                Rect buttonArea = new Rect(windowRect.x, windowRect.y, windowRect.width, 35);
+
+                // Sprawdzaj czy myszka jest nad przyciskami
+                // Input.mousePosition jest od góry, ale GUI coordinates są od dołu - trzeba przewrócić
+                Vector3 mousePos = Input.mousePosition;
+                mousePos.y = Screen.height - mousePos.y; // Konwersja
+
+                if (buttonArea.Contains(mousePos))
+                {
+                    // Myszka jest nad przyciskami - zaczynaj liczenie do pokazania
+                    buttonHoverTimer += Time.deltaTime;
+                    if (buttonHoverTimer >= 2f)
+                    {
+                        buttonsVisible = true; // Pokaż przyciski po 2s
+                    }
+                }
+                else
+                {
+                    // Myszka nie jest nad przyciskami - resetuj timer i ukryj
+                    buttonHoverTimer = 0f;
+                    buttonsVisible = false;
+                }
+            }
+
             // Throttle config refresh to reduce frame overhead - only apply every 1 second for snappier UI response
             float timeSinceLastApply = Time.time - lastConfigApplyTime;
             if (timeSinceLastApply < 1f)
@@ -340,13 +386,27 @@ public class YTChatKSPMain : MonoBehaviour
                 windowRect.width = Config.WindowWidth;
                 windowRect.height = Config.WindowHeight;
 
-                // Check auto-hide timer even if we skip other updates
+                // Check auto-hide timer - TYLKO jeśli myszka NIE jest nad oknem
                 if (Config.AutoHide && Config.AutoHideTime > 0 && Visible)
                 {
-                    autoHideTimer += Time.deltaTime;
-                    if (autoHideTimer >= Config.AutoHideTime)
+                    // Sprawdź czy myszka jest nad całym oknem (nie tylko przyciskami)
+                    Rect fullWindowArea = new Rect(windowRect.x, windowRect.y, windowRect.width, windowRect.height);
+                    Vector3 mousePos = Input.mousePosition;
+                    mousePos.y = Screen.height - mousePos.y;
+
+                    if (!fullWindowArea.Contains(mousePos))
                     {
-                        Visible = false;
+                        // Myszka NIE jest nad oknem - liczysz auto-hide timer
+                        autoHideTimer += Time.deltaTime;
+                        if (autoHideTimer >= Config.AutoHideTime)
+                        {
+                            Visible = false;
+                            autoHideTimer = 0f;
+                        }
+                    }
+                    else
+                    {
+                        // Myszka jest nad oknem - resetuj timer
                         autoHideTimer = 0f;
                     }
                 }
@@ -370,14 +430,27 @@ public class YTChatKSPMain : MonoBehaviour
             windowRect.width = Config.WindowWidth;
             windowRect.height = Config.WindowHeight;
 
-            // Auto-hide timer - liczy się tylko gdy AutoHide jest aktywny
+            // Auto-hide timer - liczy się tylko gdy AutoHide jest aktywny i myszka NIE jest nad oknem
             if (Config.AutoHide && Config.AutoHideTime > 0 && Visible)
             {
-                // Odmierzaj czas
-                autoHideTimer += Time.deltaTime;
-                if (autoHideTimer >= Config.AutoHideTime)
+                // Sprawdź czy myszka jest nad całym oknem
+                Rect fullWindowArea = new Rect(windowRect.x, windowRect.y, windowRect.width, windowRect.height);
+                Vector3 mousePos = Input.mousePosition;
+                mousePos.y = Screen.height - mousePos.y;
+
+                if (!fullWindowArea.Contains(mousePos))
                 {
-                    Visible = false;
+                    // Myszka NIE jest nad oknem - liczysz auto-hide timer
+                    autoHideTimer += Time.deltaTime;
+                    if (autoHideTimer >= Config.AutoHideTime)
+                    {
+                        Visible = false;
+                        autoHideTimer = 0f;
+                    }
+                }
+                else
+                {
+                    // Myszka jest nad oknem - resetuj timer
                     autoHideTimer = 0f;
                 }
             }
@@ -527,21 +600,24 @@ public class YTChatKSPMain : MonoBehaviour
             GUI.skin.label.fontSize = currentFontSize;
             GUI.skin.label.normal.textColor = currentFontColor;
 
-            // Top button bar
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Settings", GUILayout.Width(70)))
+            // Top button bar - Settings i Close (pokazuj tylko jeśli buttonsVisible)
+            if (buttonsVisible)
             {
-                OnOpenSettings?.Invoke();
-            }
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Close", GUILayout.Width(60)))
-            {
-                Visible = false;
-                autoHideTimer = 0f;
-            }
-            GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal(GUILayout.Height(30));
+                if (GUILayout.Button("Settings", GUILayout.Width(70)))
+                {
+                    OnOpenSettings?.Invoke();
+                }
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Close", GUILayout.Width(60)))
+                {
+                    Visible = false;
+                    autoHideTimer = 0f;
+                }
+                GUILayout.EndHorizontal();
 
-            GUILayout.Space(5);
+                GUILayout.Space(3);
+            }
 
             // Scrollable area z wiadomosciami - BEZ widocznego scrollbara
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUIStyle.none, GUIStyle.none);
@@ -606,6 +682,7 @@ public class YTChatKSPMain : MonoBehaviour
     private class SettingsWindow
     {
         private const int WINDOW_ID = 10003;
+        private const string ReleaseDate = "2026-08-03 21:30";
         public bool Visible { get; set; } = false;
         private Rect windowRect = new Rect(450, 80, 400, 600);
         private Vector2 scrollPosition = Vector2.zero;
@@ -613,66 +690,78 @@ public class YTChatKSPMain : MonoBehaviour
         public void Draw()
         {
             if (!Visible) return;
-            windowRect = SafeWindow(WINDOW_ID, windowRect, DrawContents, "Settings");
+            string windowTitle = $"Settings [{ReleaseDate}]";
+            windowRect = SafeWindow(WINDOW_ID, windowRect, DrawContents, windowTitle, isSettings: true);
         }
 
         private void DrawContents(int id)
         {
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(560));
 
-            // Opacity (przezroczysto??)
+            // 1. Opacity
             GUILayout.Label("Opacity: " + (Config.Opacity * 100).ToString("F0") + "%", GUILayout.Height(20));
-            Config.Opacity = GUILayout.HorizontalSlider(Config.Opacity, 0f, 1f, GUILayout.Height(20));
+            Config.Opacity = GUILayout.HorizontalSlider(Config.Opacity, 0f, 1f, GUILayout.Height(18));
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Window Width
+            // 2. Text Background Opacity
+            GUILayout.Label("Text Background Opacity: " + Config.TextBackgroundOpacity.ToString("F2"), GUILayout.Height(20));
+            Config.TextBackgroundOpacity = GUILayout.HorizontalSlider(Config.TextBackgroundOpacity, 0f, 1f, GUILayout.Height(18));
+
+            GUILayout.Space(8);
+
+            // 3. Window Width
             GUILayout.Label("Window Width: " + Config.WindowWidth + " px", GUILayout.Height(20));
-            Config.WindowWidth = (int)GUILayout.HorizontalSlider(Config.WindowWidth, 200f, 1200f, GUILayout.Height(20));
+            Config.WindowWidth = (int)GUILayout.HorizontalSlider(Config.WindowWidth, 200f, 1200f, GUILayout.Height(18));
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Window Height
+            // 4. Window Height
             GUILayout.Label("Window Height: " + Config.WindowHeight + " px", GUILayout.Height(20));
-            Config.WindowHeight = (int)GUILayout.HorizontalSlider(Config.WindowHeight, 100f, 800f, GUILayout.Height(20));
+            Config.WindowHeight = (int)GUILayout.HorizontalSlider(Config.WindowHeight, 100f, 800f, GUILayout.Height(18));
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Font Size
+            // 5. Font Size
             GUILayout.Label("Font Size: " + Config.FontSize + " px", GUILayout.Height(20));
-            Config.FontSize = (int)GUILayout.HorizontalSlider(Config.FontSize, 10f, 40f, GUILayout.Height(20));
+            Config.FontSize = (int)GUILayout.HorizontalSlider(Config.FontSize, 10f, 40f, GUILayout.Height(18));
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Font Color (RGB)
+            // 6. Font Color (RGB)
             GUILayout.Label("Font Color (RGB):", GUILayout.Height(20));
-            GUILayout.Label("Red: " + Config.FontColor.r.ToString("F2"), GUILayout.Height(20));
+
+            GUILayout.Label("Red: " + Config.FontColor.r.ToString("F2"), GUILayout.Height(18));
             Config.FontColor = new Color(
-                GUILayout.HorizontalSlider(Config.FontColor.r, 0f, 1f, GUILayout.Height(20)),
+                GUILayout.HorizontalSlider(Config.FontColor.r, 0f, 1f, GUILayout.Height(18)),
                 Config.FontColor.g,
                 Config.FontColor.b,
                 Config.FontColor.a
             );
 
-            GUILayout.Label("Green: " + Config.FontColor.g.ToString("F2"), GUILayout.Height(20));
+            GUILayout.Space(4);
+
+            GUILayout.Label("Green: " + Config.FontColor.g.ToString("F2"), GUILayout.Height(18));
             Config.FontColor = new Color(
                 Config.FontColor.r,
-                GUILayout.HorizontalSlider(Config.FontColor.g, 0f, 1f, GUILayout.Height(20)),
+                GUILayout.HorizontalSlider(Config.FontColor.g, 0f, 1f, GUILayout.Height(18)),
                 Config.FontColor.b,
                 Config.FontColor.a
             );
 
-            GUILayout.Label("Blue: " + Config.FontColor.b.ToString("F2"), GUILayout.Height(20));
+            GUILayout.Space(4);
+
+            GUILayout.Label("Blue: " + Config.FontColor.b.ToString("F2"), GUILayout.Height(18));
             Config.FontColor = new Color(
                 Config.FontColor.r,
                 Config.FontColor.g,
-                GUILayout.HorizontalSlider(Config.FontColor.b, 0f, 1f, GUILayout.Height(20)),
+                GUILayout.HorizontalSlider(Config.FontColor.b, 0f, 1f, GUILayout.Height(18)),
                 Config.FontColor.a
             );
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Auto-hide timeout (1s to 10 min)
+            // 7. Auto-hide timeout (1s to 10 min)
             float timeoutSeconds = Config.AutoHideTime;
             string timeoutDisplay;
             if (timeoutSeconds < 60f)
@@ -686,35 +775,29 @@ public class YTChatKSPMain : MonoBehaviour
             }
 
             GUILayout.Label("Auto-hide Timeout: " + timeoutDisplay, GUILayout.Height(20));
-            Config.AutoHideTime = GUILayout.HorizontalSlider(Config.AutoHideTime, 1f, 600f, GUILayout.Height(20));
+            Config.AutoHideTime = GUILayout.HorizontalSlider(Config.AutoHideTime, 1f, 600f, GUILayout.Height(18));
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Auto-hide ON/OFF
-            GUILayout.BeginHorizontal();
+            // 8. Enable Auto-hide
+            GUILayout.BeginHorizontal(GUILayout.Height(22));
             GUILayout.Label("Enable Auto-hide:", GUILayout.Width(150));
             Config.AutoHide = GUILayout.Toggle(Config.AutoHide, "", GUILayout.Width(30));
             GUILayout.EndHorizontal();
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Refresh Interval
+            // 9. Refresh Interval
             GUILayout.Label("Refresh Interval: " + Config.RefreshInterval.ToString("F1") + " sec", GUILayout.Height(20));
-            Config.RefreshInterval = GUILayout.HorizontalSlider(Config.RefreshInterval, 0.5f, 10f, GUILayout.Height(20));
+            Config.RefreshInterval = GUILayout.HorizontalSlider(Config.RefreshInterval, 0.5f, 10f, GUILayout.Height(18));
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
-            // Lock window position
-            GUILayout.BeginHorizontal();
+            // 10. Lock window position
+            GUILayout.BeginHorizontal(GUILayout.Height(22));
             GUILayout.Label("Lock Window Position:", GUILayout.Width(150));
             Config.LockWindowPosition = GUILayout.Toggle(Config.LockWindowPosition, "", GUILayout.Width(30));
             GUILayout.EndHorizontal();
-
-            GUILayout.Space(10);
-
-            // Text Background Opacity
-            GUILayout.Label("Text Background Opacity: " + Config.TextBackgroundOpacity.ToString("F2"), GUILayout.Height(20));
-            Config.TextBackgroundOpacity = GUILayout.HorizontalSlider(Config.TextBackgroundOpacity, 0f, 1f, GUILayout.Height(20));
 
             GUILayout.Space(10);
 
@@ -758,15 +841,40 @@ public class YTChatKSPMain : MonoBehaviour
         }
     }
 
-    private static Rect SafeWindow(int id, Rect rect, GUI.WindowFunction func, string title)
+    private static Rect SafeWindow(int id, Rect rect, GUI.WindowFunction func, string title, bool isSettings = false, bool isChat = false)
     {
         try
         {
+            if (isSettings)
+            {
+                // Custom style dla Settings okna - nieprzezroczyste
+                GUIStyle settingsStyle = new GUIStyle(GUI.skin.window);
+                settingsStyle.normal.background = MakeTexture(1, 1, new Color(0.2f, 0.2f, 0.2f, 1f)); // Ciemne tło, pełna opacitość
+                settingsStyle.onNormal.background = settingsStyle.normal.background;
+                settingsStyle.focused.background = settingsStyle.normal.background;
+                settingsStyle.onFocused.background = settingsStyle.normal.background;
+                settingsStyle.normal.textColor = Color.white;
+
+                return GUILayout.Window(id, rect, func, title, settingsStyle);
+            }
+
             return GUILayout.Window(id, rect, func, title);
         }
         catch
         {
             return GUI.Window(id, rect, func, title);
         }
+    }
+
+    private static Texture2D MakeTexture(int width, int height, Color color)
+    {
+        Color[] pixels = new Color[width * height];
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = color;
+
+        Texture2D texture = new Texture2D(width, height);
+        texture.SetPixels(pixels);
+        texture.Apply();
+        return texture;
     }
 }
